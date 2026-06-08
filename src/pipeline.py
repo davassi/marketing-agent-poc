@@ -23,6 +23,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 
 from mock_data import get_pixel_events
+from message_store import filter_new_customers, mark_as_sent
 
 
 # ============================================================
@@ -77,7 +78,13 @@ def data_agent(state: PipelineState) -> PipelineState:
 def analysis_agent(state: PipelineState) -> PipelineState:
     print("\n🧠 [Analysis Agent] Analyzing customer behavior...")
 
-    events_json = json.dumps(state["raw_events"], indent=2)
+    # Filter out customers who've already been messaged
+    filtered_events = filter_new_customers(state["raw_events"])
+    if not filtered_events:
+        print("   → No new customers to analyze.")
+        return {**state, "segments": []}
+
+    events_json = json.dumps(filtered_events, indent=2)
 
     response = llm.invoke([
         SystemMessage(content="""You are a marketing analyst specializing in behavioral segmentation.
@@ -103,17 +110,17 @@ Return ONLY a valid JSON array. No markdown, no extra text."""),
         HumanMessage(content=f"Pixel events:\n{events_json}")
     ])
 
-    try:
-        segments = json.loads(response.content)
-    except json.JSONDecodeError:
-        # Graceful fallback if model adds markdown fences
-        raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
-        segments = json.loads(raw)
+  try:
+      segments = json.loads(response.content)
+  except json.JSONDecodeError:
+      # Graceful fallback if model adds markdown fences
+      raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
+      segments = json.loads(raw)
 
-    for s in segments:
-        print(f"   → {s['name']}: {s['segment']}  |  {s['reasoning']}")
+  for s in segments:
+      print(f"   → {s['name']}: {s['segment']}  |  {s['reasoning']}")
 
-    return {**state, "segments": segments}
+  return {**state, "segments": segments}
 
 
 # ============================================================
@@ -124,6 +131,9 @@ Return ONLY a valid JSON array. No markdown, no extra text."""),
 
 def cta_agent(state: PipelineState) -> PipelineState:
     print("\n✍️  [CTA Agent] Crafting WhatsApp messages...")
+
+    if not state["segments"]:
+        return {**state, "messages": []}
 
     segments_json = json.dumps(state["segments"], indent=2)
 
@@ -155,13 +165,16 @@ Return ONLY valid JSON. No extra text."""),
         HumanMessage(content=f"Customer segments:\n{segments_json}")
     ])
 
-    try:
-        messages = json.loads(response.content)
-    except json.JSONDecodeError:
-        raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
-        messages = json.loads(raw)
+  try:
+      messages = json.loads(response.content)
+  except json.JSONDecodeError:
+      raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
+      messages = json.loads(raw)
 
-    return {**state, "messages": messages}
+  # Record these messages as sent (ready for actual Twilio/Meta integration)
+  mark_as_sent(messages)
+
+  return {**state, "messages": messages}
 
 
 # ============================================================
