@@ -110,17 +110,17 @@ Return ONLY a valid JSON array. No markdown, no extra text."""),
         HumanMessage(content=f"Pixel events:\n{events_json}")
     ])
 
-  try:
-      segments = json.loads(response.content)
-  except json.JSONDecodeError:
-      # Graceful fallback if model adds markdown fences
-      raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
-      segments = json.loads(raw)
+    try:
+        segments = json.loads(response.content)
+    except json.JSONDecodeError:
+        # Graceful fallback if model adds markdown fences
+        raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
+        segments = json.loads(raw)
 
-  for s in segments:
-      print(f"   → {s['name']}: {s['segment']}  |  {s['reasoning']}")
+    for s in segments:
+        print(f"   → {s['name']}: {s['segment']}  |  {s['reasoning']}")
 
-  return {**state, "segments": segments}
+    return {**state, "segments": segments}
 
 
 # ============================================================
@@ -165,16 +165,16 @@ Return ONLY valid JSON. No extra text."""),
         HumanMessage(content=f"Customer segments:\n{segments_json}")
     ])
 
-  try:
-      messages = json.loads(response.content)
-  except json.JSONDecodeError:
-      raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
-      messages = json.loads(raw)
+    try:
+        messages = json.loads(response.content)
+    except json.JSONDecodeError:
+        raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
+        messages = json.loads(raw)
 
-  # Record these messages as sent (ready for actual Twilio/Meta integration)
-  mark_as_sent(messages)
+    # Record these messages as sent (ready for actual Twilio/Meta integration)
+    mark_as_sent(messages)
 
-  return {**state, "messages": messages}
+    return {**state, "messages": messages}
 
 
 # ============================================================
